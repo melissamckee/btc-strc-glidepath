@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC/STRC Glide Path Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); }
+        .card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card:hover { transform: translateY(-2px); }
+        input[type="range"] { accent-color: #eab308; }
+        input[type="number"]::-webkit-inner-spin-button { opacity: 0.3; }
+        .progress-track { background: #1c1c1e; height: 24px; border-radius: 12px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; border-radius: 12px; transition: width 0.4s ease; }
+        .tooltip-trigger { cursor: help; border-bottom: 1px dotted #52525b; }
+        .section-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #52525b; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 min-h-screen">
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-zinc-800 pb-6 gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tighter text-white">BTC/STRC Glide Path</h1>
+                <p class="text-zinc-400 mt-1 text-sm">How much STRC do you need, and how do you get there? · Data only, no advice</p>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+                <div id="btcPriceLive" class="px-4 py-2 bg-zinc-900 rounded-2xl font-mono text-emerald-400 font-medium flex items-center gap-2">
+                    <i class="fas fa-circle animate-pulse text-xs"></i> BTC LIVE
+                </div>
+                <div class="text-xs text-zinc-500 text-right leading-relaxed">
+                    Strategy Inc (STRC)<br>
+                    <span class="text-amber-400">11.25% annual · $100 par · 100% ROC 10+ yrs</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-6">
+            <!-- LEFT: Inputs -->
+            <div class="col-span-12 lg:col-span-4 xl:col-span-3">
+                <div class="glass border border-zinc-800 rounded-3xl p-6 lg:sticky lg:top-6 space-y-7">
+
+                    <!-- SECTION 1: The Destination -->
+                    <div>
+                        <div class="section-label mb-3 text-amber-400">① The Destination</div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-xs text-zinc-400 block mb-1">Monthly Income Needed (total)</label>
+                                <input id="totalNeed" type="number" value="6000" min="0" step="100" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="text-xs text-zinc-400 block mb-1">Covered by Other Sources (SS, pension, etc.)</label>
+                                <input id="otherIncome" type="number" value="2500" min="0" step="100" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div class="bg-zinc-900/50 rounded-2xl p-3 text-center">
+                                <div class="text-[10px] text-zinc-500 uppercase">Gap STRC must fill</div>
+                                <div id="monthlyGap" class="text-2xl font-bold text-amber-400 font-mono mt-1">$3,500</div>
+                                <div class="text-[10px] text-zinc-500 mt-1">= <span id="targetShares" class="text-amber-400 font-mono">3,734</span> shares @ $0.9375/mo each</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Where You Are -->
+                    <div>
+                        <div class="section-label mb-3 text-emerald-400">② Where You Are Now</div>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs text-zinc-400">BTC Coins</label>
+                                    <input id="btcHold" type="number" value="5" step="0.0001" min="0" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-zinc-400">BTC Cost Basis ($)</label>
+                                    <input id="btcBasis" type="number" value="150000" min="0" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                                </div>
+                            </div>
+                            <div id="avgCostLine" class="text-[10px] text-zinc-500 font-mono text-right">Avg: $30,000/BTC</div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs text-zinc-400">STRC Shares Owned</label>
+                                    <input id="strcHold" type="number" value="0" min="0" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-zinc-400">Total Cost Basis ($)</label>
+                                    <input id="strcBasis" type="number" value="0" min="0" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-lg font-mono focus:outline-none focus:border-amber-400">
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-zinc-400 mb-1">
+                                    <span>Age</span>
+                                    <span id="ageVal" class="font-mono text-amber-400">65</span>
+                                </div>
+                                <input id="age" type="range" min="40" max="85" value="65" class="w-full">
+                                <div class="text-[10px] text-zinc-600 text-right">Horizon: <span id="horizonInline" class="text-zinc-400">20</span> years</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: The Two Lanes -->
+                    <div>
+                        <div class="section-label mb-3 text-sky-400">③ How You Get There</div>
+
+                        <!-- Lane A: DCA Phases -->
+                        <div class="mb-5">
+                            <div class="text-xs text-zinc-300 font-medium mb-2 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span> Lane A: Monthly DCA into STRC
+                            </div>
+                            <div class="text-[10px] text-zinc-500 mb-3">Cash flow purchases — adjust by age as income sources change</div>
+                            <div id="dcaRows" class="space-y-3"></div>
+                            <button onclick="addDcaPhase()" id="addDcaBtn" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 mt-3 transition">
+                                <i class="fas fa-plus text-[10px]"></i> Add phase
+                            </button>
+                        </div>
+
+                        <!-- Lane B: Price Triggers -->
+                        <div>
+                            <div class="text-xs text-zinc-300 font-medium mb-2 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Lane B: BTC Price Triggers
+                            </div>
+                            <div class="text-[10px] text-zinc-500 mb-3">Sell BTC into strength — each % is of your remaining stack at that point</div>
+                            <div id="triggerRows" class="space-y-3"></div>
+                            <button onclick="addTrigger()" id="addTriggerBtn" class="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 mt-3 transition">
+                                <i class="fas fa-plus text-[10px]"></i> Add trigger
+                            </button>
+                            <div id="ladderTotal" class="text-[10px] text-zinc-500 mt-2 font-mono"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tax -->
+                    <div>
+                        <div class="section-label mb-3">Tax on BTC Sales</div>
+                        <div class="space-y-3">
+                            <select id="taxBracket" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400">
+                                <option value="0">Federal LTCG: 0%</option>
+                                <option value="15" selected>Federal LTCG: 15%</option>
+                                <option value="20">Federal LTCG: 20%</option>
+                            </select>
+                            <select id="stateTax" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400">
+                                <option value="0" selected>State: None (WA, TX, FL, NV, etc.)</option>
+                                <option value="13.3">State: California 13.3%</option>
+                                <option value="10.75">State: New Jersey 10.75%</option>
+                                <option value="8.82">State: New York 8.82%</option>
+                                <option value="9.3">State: Oregon 9.3%</option>
+                                <option value="7.65">State: Minnesota 7.65%</option>
+                                <option value="5.75">State: Maryland 5.75%</option>
+                                <option value="5.25">State: Virginia 5.25%</option>
+                                <option value="5">State: Massachusetts 5%</option>
+                                <option value="4.95">State: Illinois 4.95%</option>
+                                <option value="4.4">State: Colorado 4.4%</option>
+                            </select>
+                            <label class="flex items-center gap-2 text-xs text-zinc-400">
+                                <input id="niitCheck" type="checkbox" class="accent-amber-400">
+                                NIIT +3.8% (AGI over $200K/$250K married)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-zinc-800 text-[10px] text-zinc-600 space-y-1">
+                        <div class="flex justify-between"><span>STRC price</span><span class="font-mono">$99.50</span></div>
+                        <div class="flex justify-between"><span>Annual div / share</span><span class="font-mono">$11.25</span></div>
+                        <div class="flex justify-between"><span>Monthly div / share</span><span class="font-mono">$0.9375</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Dashboard -->
+            <div class="col-span-12 lg:col-span-8 xl:col-span-9 space-y-6">
+
+                <!-- PROGRESS TO TARGET -->
+                <div class="glass border border-zinc-800 rounded-3xl p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <div class="text-lg font-semibold">Progress to Target</div>
+                            <div class="text-sm text-zinc-400">Target: <span id="targetSharesTop" class="text-amber-400 font-mono">3,734</span> shares for <span id="gapTop" class="text-amber-400 font-mono">$3,500</span>/mo</div>
+                        </div>
+                        <div class="text-right">
+                            <div id="progressPct" class="text-4xl font-bold text-amber-400 font-mono">0%</div>
+                        </div>
+                    </div>
+                    <!-- Progress bar -->
+                    <div class="progress-track mb-3">
+                        <div class="flex h-full">
+                            <div id="barExisting" class="progress-fill bg-zinc-600" style="width:0%" title="Already owned"></div>
+                            <div id="barDCA" class="progress-fill bg-sky-500" style="width:0%" title="From DCA"></div>
+                            <div id="barTriggers" class="progress-fill bg-amber-500" style="width:0%" title="From BTC triggers"></div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 text-[10px] text-zinc-500">
+                        <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-600 inline-block"></span> Existing: <span id="legendExisting" class="font-mono">0</span></div>
+                        <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-500 inline-block"></span> DCA: <span id="legendDCA" class="font-mono">0</span></div>
+                        <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> BTC triggers: <span id="legendTriggers" class="font-mono">0</span></div>
+                        <div class="ml-auto"><span id="legendRemaining" class="font-mono text-zinc-400">3,734 to go</span></div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="card glass border border-zinc-800 rounded-3xl p-5">
+                        <div class="text-[10px] uppercase tracking-widest text-zinc-500">Current Monthly</div>
+                        <div id="currentMonthly" class="text-3xl font-semibold text-white mt-2 font-mono">$0</div>
+                        <div class="text-[10px] text-zinc-500">from existing STRC</div>
+                    </div>
+                    <div class="card glass border border-zinc-800 rounded-3xl p-5">
+                        <div class="text-[10px] uppercase tracking-widest text-zinc-500">After All Triggers</div>
+                        <div id="afterTriggersMonthly" class="text-3xl font-semibold text-emerald-400 mt-2 font-mono">$0</div>
+                        <div class="text-[10px] text-zinc-500">+ DCA growth/mo</div>
+                    </div>
+                    <div class="card glass border border-zinc-800 rounded-3xl p-5">
+                        <div class="text-[10px] uppercase tracking-widest text-zinc-500">Total Tax on Triggers</div>
+                        <div id="totalTax" class="text-3xl font-semibold text-rose-400 mt-2 font-mono">$0</div>
+                        <div id="taxRateDisplay" class="text-[10px] text-zinc-500">—</div>
+                    </div>
+                    <div class="card glass border border-zinc-800 rounded-3xl p-5">
+                        <div class="text-[10px] uppercase tracking-widest text-zinc-500">BTC Remaining</div>
+                        <div id="btcRemaining" class="text-2xl font-semibold text-white mt-2 font-mono">5.0000</div>
+                        <div id="btcRemainingVal" class="text-emerald-400 text-[10px] font-mono">—</div>
+                    </div>
+                </div>
+
+                <!-- DCA Timeline -->
+                <div class="glass border border-zinc-800 rounded-3xl p-6">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="text-lg font-semibold">DCA Timeline to Target</div>
+                            <div class="text-sm text-zinc-400">How long DCA alone takes — triggers accelerate this</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-zinc-500 uppercase">DCA Only</div>
+                            <div id="dcaOnlyYears" class="text-3xl font-bold text-sky-400 font-mono">—</div>
+                            <div class="text-[10px] text-zinc-500">years</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 mt-4">
+                        <div class="bg-zinc-900/50 rounded-2xl p-4 text-center">
+                            <div class="text-[10px] text-zinc-500 uppercase mb-1">If Triggers Fire Too</div>
+                            <div id="combinedYears" class="text-2xl font-bold text-emerald-400 font-mono">—</div>
+                            <div class="text-[10px] text-zinc-500">years to target</div>
+                        </div>
+                        <div class="bg-zinc-900/50 rounded-2xl p-4 text-center">
+                            <div class="text-[10px] text-zinc-500 uppercase mb-1">Already Funded</div>
+                            <div id="alreadyFundedPct" class="text-2xl font-bold text-zinc-300 font-mono">0%</div>
+                            <div class="text-[10px] text-zinc-500">of target from existing + triggers</div>
+                        </div>
+                        <div class="bg-zinc-900/50 rounded-2xl p-4 text-center">
+                            <div class="text-[10px] text-zinc-500 uppercase mb-1">ROC Tax-Free For</div>
+                            <div id="depletionYears" class="text-2xl font-bold text-amber-400 font-mono">—</div>
+                            <div class="text-[10px] text-zinc-500">years (then divs taxed as LTCG)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trigger Waterfall -->
+                <div class="glass border border-zinc-800 rounded-3xl p-6">
+                    <div class="mb-4">
+                        <div class="font-semibold">Price Trigger Waterfall</div>
+                        <div class="text-xs text-zinc-400">Each trigger: what you sell, what you gain, running totals</div>
+                    </div>
+                    <div class="overflow-x-auto -mx-2">
+                        <table id="waterfallTable" class="w-full text-sm font-mono min-w-[700px]"></table>
+                    </div>
+                </div>
+
+                <!-- What-If at Different Prices -->
+                <div class="glass border border-zinc-800 rounded-3xl p-6">
+                    <div class="mb-4">
+                        <div class="font-semibold">What Does the Target Cost You in BTC?</div>
+                        <div class="text-xs text-zinc-400">At different BTC prices, how much of your stack does <span id="targetInTable" class="text-amber-400">3,734</span> shares of STRC cost?</div>
+                    </div>
+                    <div class="overflow-x-auto -mx-2">
+                        <table id="costTable" class="w-full text-sm font-mono min-w-[500px]"></table>
+                    </div>
+                </div>
+
+                <!-- Income Journey Chart -->
+                <div class="glass border border-zinc-800 rounded-3xl p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <div class="text-lg font-semibold">The Journey — Monthly Income Over Time</div>
+                            <div class="text-sm text-zinc-400">Blue = DCA alone (with phase changes) · amber = if triggers also fire</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-zinc-500 uppercase">Target</div>
+                            <div id="chartTargetIncome" class="text-2xl font-bold text-amber-400 font-mono">—</div>
+                            <div class="text-[10px] text-zinc-500">/month</div>
+                        </div>
+                    </div>
+                    <div class="h-72">
+                        <canvas id="journeyChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-[10px] text-zinc-500 flex flex-wrap gap-4">
+                        <div><span class="inline-block w-3 h-px bg-sky-400"></span> DCA only (steady)</div>
+                        <div><span class="inline-block w-3 h-px bg-amber-400"></span> After all triggers fire (unknown timing)</div>
+                        <div><span class="inline-block w-3 h-0.5 bg-amber-400/30" style="border-top: 2px dashed rgba(234,179,8,0.4)"></span> Target income</div>
+                    </div>
+                </div>
+
+                <!-- Stress + Risks -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass border border-zinc-800 rounded-3xl p-6">
+                        <div class="uppercase text-xs tracking-widest text-rose-400 mb-4 flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle"></i> 50% BTC Crash
+                        </div>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-zinc-400">BTC drops to</span>
+                                <span id="stressPrice" class="font-mono text-rose-400">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-zinc-400">Your BTC value</span>
+                                <span id="stressBtcVal" class="font-mono text-rose-400">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-zinc-400">Your STRC (par)</span>
+                                <span id="stressStrcVal" class="font-mono text-white">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-zinc-400">Monthly income</span>
+                                <span id="stressIncome" class="font-mono text-emerald-400">unchanged</span>
+                            </div>
+                            <div class="h-px bg-zinc-800"></div>
+                            <div class="text-[10px] text-zinc-500 bg-zinc-900/50 p-3 rounded-2xl leading-relaxed">
+                                Strategy holds ~713,500 BTC · $2.25B reserve (~2.5yr)<br>
+                                <span class="text-amber-400">STRC income unaffected by BTC price</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass border border-zinc-800 rounded-3xl p-6">
+                        <div class="uppercase text-xs tracking-widest text-zinc-400 mb-4">Risks — Not Buried</div>
+                        <div class="space-y-3 text-zinc-400 text-xs leading-relaxed">
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">Counterparty:</strong> depends entirely on Strategy Inc solvency</span></div>
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">Junior:</strong> below STRF + all debt in liquidation — could get zero</span></div>
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">Variable rate:</strong> board can reduce dividend at will</span></div>
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">ROC temporary:</strong> if E&P generated, dividends become taxable</span></div>
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">Reserve:</strong> $2.25B covers ~2.5 years of all preferred dividends</span></div>
+                            <div class="flex gap-2"><span class="text-rose-400 mt-0.5">●</span><span><strong class="text-zinc-300">Not insured:</strong> not FDIC, not a bank deposit, not Treasuries</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-12 text-center text-[10px] text-zinc-600 max-w-lg mx-auto leading-relaxed">
+            Modeling tool only. Not financial, tax, or investment advice. Tax estimates simplified — consult a professional.
+            STRC: $99.50 price, 11.25% on $100 par, 100% ROC assumed. Strategy Inc data as of February 2026.
+        </div>
+    </div>
+
+    <script>
+        const STRC_PRICE = 99.5;
+        const PAR = 100;
+        const ANN_DIV = 11.25;
+        const MO_DIV = ANN_DIV / 12;
+
+        let btcPrice = 68000;
+        let triggers = [
+            { price: 150000, pct: 10 },
+            { price: 200000, pct: 10 },
+            { price: 300000, pct: 10 }
+        ];
+        let dcaPhases = [
+            { age: 65, amount: 500, label: '' },
+            { age: 67, amount: 1000, label: 'SS starts' }
+        ];
+
+        function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+        function fmtK(n) { return n >= 1e6 ? '$' + (n/1e6).toFixed(1) + 'M' : '$' + Math.round(n/1e3) + 'k'; }
+
+        // --- DCA Phases ---
+        function renderDcaPhases() {
+            const c = document.getElementById('dcaRows');
+            c.innerHTML = '';
+            dcaPhases.forEach((p, i) => {
+                const d = document.createElement('div');
+                d.className = 'flex items-center gap-2';
+                d.innerHTML = `
+                    <div class="w-16">
+                        <div class="text-[10px] text-zinc-500 mb-1">${i === 0 ? 'Age' : 'At age'}</div>
+                        <input type="number" value="${p.age}" min="40" max="95"
+                            onchange="dcaPhases[${i}].age=+this.value;calc()"
+                            class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-sky-400 text-center">
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-[10px] text-zinc-500 mb-1">$/month</div>
+                        <input type="number" value="${p.amount}" min="0" step="100"
+                            onchange="dcaPhases[${i}].amount=+this.value;calc()"
+                            class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-[10px] text-zinc-500 mb-1">Note</div>
+                        <input type="text" value="${p.label}" placeholder="optional"
+                            onchange="dcaPhases[${i}].label=this.value"
+                            class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-[11px] text-zinc-400 focus:outline-none focus:border-sky-400">
+                    </div>
+                    ${dcaPhases.length > 1 ? `<button onclick="dcaPhases.splice(${i},1);renderDcaPhases();calc()" class="text-zinc-600 hover:text-rose-400 text-sm mt-4 transition">
+                        <i class="fas fa-times"></i>
+                    </button>` : '<div class="w-5 mt-4"></div>'}`;
+                c.appendChild(d);
+            });
+            document.getElementById('addDcaBtn').classList.toggle('hidden', dcaPhases.length >= 5);
+        }
+        function addDcaPhase() {
+            if (dcaPhases.length >= 5) return;
+            const lastAge = dcaPhases.length ? dcaPhases[dcaPhases.length-1].age + 2 : 65;
+            const lastAmt = dcaPhases.length ? dcaPhases[dcaPhases.length-1].amount : 500;
+            dcaPhases.push({ age: lastAge, amount: lastAmt, label: '' });
+            renderDcaPhases(); calc();
+        }
+        // Get DCA $/month at a given age
+        function getDcaAtAge(age) {
+            const sorted = [...dcaPhases].sort((a, b) => a.age - b.age);
+            let amount = 0;
+            for (const p of sorted) {
+                if (age >= p.age) amount = p.amount;
+                else break;
+            }
+            return amount;
+        }
+        // Get DCA shares/month at a given age
+        function getDcaSharesAtAge(age) {
+            return getDcaAtAge(age) / STRC_PRICE;
+        }
+
+        async function fetchBtcPrice() {
+            try {
+                const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+                btcPrice = (await r.json()).bitcoin.usd;
+                document.getElementById('btcPriceLive').innerHTML =
+                    `<i class="fas fa-circle animate-pulse text-xs"></i> ${fmt(btcPrice)}`;
+            } catch(e) {
+                document.getElementById('btcPriceLive').innerHTML =
+                    `<i class="fas fa-circle text-xs text-zinc-500"></i> ${fmt(btcPrice)} <span class="text-zinc-500 text-xs">(fallback)</span>`;
+            }
+            calc();
+        }
+
+        // --- Triggers ---
+        function renderTriggers() {
+            const c = document.getElementById('triggerRows');
+            c.innerHTML = '';
+            triggers.forEach((t, i) => {
+                const d = document.createElement('div');
+                d.className = 'flex items-center gap-2';
+                d.innerHTML = `
+                    <div class="flex-1">
+                        <input type="number" value="${t.price}" min="10000" step="10000" placeholder="BTC price"
+                            onchange="triggers[${i}].price=+this.value;calc()"
+                            class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400">
+                    </div>
+                    <div class="w-20">
+                        <input type="number" value="${t.pct}" min="1" max="100" placeholder="%"
+                            onchange="triggers[${i}].pct=+this.value;calc()"
+                            class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 text-center">
+                    </div>
+                    <span class="text-[10px] text-zinc-600 w-12">% rem</span>
+                    <button onclick="triggers.splice(${i},1);renderTriggers();calc()" class="text-zinc-600 hover:text-rose-400 text-sm transition">
+                        <i class="fas fa-times"></i>
+                    </button>`;
+                c.appendChild(d);
+            });
+            document.getElementById('addTriggerBtn').classList.toggle('hidden', triggers.length >= 5);
+            const tot = triggers.reduce((s,t) => s + t.pct, 0);
+            const el = document.getElementById('ladderTotal');
+            el.innerHTML = tot > 100
+                ? `<span class="text-rose-400">⚠ ${tot}% total — each is % of remaining BTC</span>`
+                : `Each trigger sells % of remaining BTC at that price`;
+        }
+        function addTrigger() {
+            if (triggers.length >= 5) return;
+            const last = triggers.length ? triggers[triggers.length-1].price + 50000 : 150000;
+            triggers.push({ price: last, pct: 10 });
+            renderTriggers(); calc();
+        }
+
+        // --- Main Calc ---
+        function calc() {
+            const totalNeed = parseFloat(document.getElementById('totalNeed').value) || 0;
+            const otherIncome = parseFloat(document.getElementById('otherIncome').value) || 0;
+            const btcHold = parseFloat(document.getElementById('btcHold').value) || 0;
+            const btcBasis = parseFloat(document.getElementById('btcBasis').value) || 0;
+            const strcHold = parseFloat(document.getElementById('strcHold').value) || 0;
+            const strcBasis = parseFloat(document.getElementById('strcBasis').value) || 0;
+            const age = parseInt(document.getElementById('age').value) || 65;
+            const fedRate = parseFloat(document.getElementById('taxBracket').value) / 100;
+            const stateRate = parseFloat(document.getElementById('stateTax').value) / 100;
+            const niit = document.getElementById('niitCheck').checked ? 0.038 : 0;
+            const taxRate = fedRate + stateRate + niit;
+            const horizon = Math.max(15, 85 - age);
+            const avgCost = btcHold > 0 ? btcBasis / btcHold : 0;
+
+            // ① Destination
+            const gap = Math.max(0, totalNeed - otherIncome);
+            const targetShares = gap > 0 ? Math.ceil(gap / MO_DIV) : 0;
+
+            document.getElementById('monthlyGap').textContent = fmt(gap);
+            document.getElementById('targetShares').textContent = targetShares.toLocaleString();
+            document.getElementById('targetSharesTop').textContent = targetShares.toLocaleString();
+            document.getElementById('targetInTable').textContent = targetShares.toLocaleString();
+            document.getElementById('gapTop').textContent = fmt(gap);
+            document.getElementById('avgCostLine').textContent = btcHold > 0 ? `Avg: ${fmt(avgCost)}/BTC` : '';
+            document.getElementById('ageVal').textContent = age;
+            document.getElementById('horizonInline').textContent = horizon;
+
+            // ② DCA — compute total shares from phased DCA over horizon
+            // Walk month by month to account for changing DCA rates
+            let dcaTotalShares = 0;
+            let dcaOnlyTotalShares = 0; // without triggers
+            const horizonMonths = horizon * 12;
+            for (let m = 0; m < horizonMonths; m++) {
+                const ageAtMonth = age + m / 12;
+                const sharesThisMonth = getDcaSharesAtAge(ageAtMonth);
+                dcaTotalShares += sharesThisMonth;
+                dcaOnlyTotalShares += sharesThisMonth;
+            }
+
+            // ③ Run triggers
+            const sorted = [...triggers].sort((a, b) => a.price - b.price);
+            let btcLeft = btcHold;
+            let triggerShares = 0;
+            let triggerTax = 0;
+            let steps = [];
+
+            sorted.forEach(t => {
+                const sell = btcLeft * (t.pct / 100);
+                if (sell <= 0 || btcLeft <= 0) return;
+                const gross = sell * t.price;
+                const basis = sell * avgCost;
+                const gain = Math.max(0, gross - basis);
+                const tax = gain * taxRate;
+                const net = gross - tax;
+                const shares = net / STRC_PRICE;
+
+                btcLeft -= sell;
+                triggerShares += shares;
+                triggerTax += tax;
+
+                steps.push({
+                    price: t.price, pct: t.pct, sell, gross, tax, net, shares,
+                    runStrc: strcHold + triggerShares,
+                    runMonthly: (strcHold + triggerShares) * MO_DIV,
+                    btcLeft
+                });
+            });
+
+            // Totals
+            const existingShares = strcHold;
+            const totalFromTriggers = triggerShares;
+            const totalFixedShares = existingShares + totalFromTriggers;
+            const sharesStillNeeded = Math.max(0, targetShares - totalFixedShares);
+
+            // DCA timeline — walk month by month to find when target is reached
+            // Combined: existing + triggers + DCA over time
+            let combinedMonths = Infinity;
+            let dcaOnlyMonths = Infinity;
+            let runSharesDCA = existingShares;
+            let runSharesCombined = totalFixedShares; // existing + triggers
+            for (let m = 1; m <= horizonMonths; m++) {
+                const ageAtMonth = age + m / 12;
+                const sharesThisMonth = getDcaSharesAtAge(ageAtMonth);
+                runSharesDCA += sharesThisMonth;
+                runSharesCombined += sharesThisMonth;
+                if (dcaOnlyMonths === Infinity && runSharesDCA >= targetShares) dcaOnlyMonths = m;
+                if (combinedMonths === Infinity && runSharesCombined >= targetShares) combinedMonths = m;
+            }
+            const dcaYears = combinedMonths / 12;
+            const dcaOnlyYears = dcaOnlyMonths / 12;
+
+            // Final position after triggers
+            const afterTriggersShares = totalFixedShares;
+            const afterTriggersMonthly = afterTriggersShares * MO_DIV;
+            const currentMonthly = existingShares * MO_DIV;
+
+            // Progress
+            const progressPct = targetShares > 0 ? Math.min(100, (totalFixedShares / targetShares) * 100) : 0;
+            const existPct = targetShares > 0 ? Math.min(100, (existingShares / targetShares) * 100) : 0;
+            const dcaPlaceholder = 0; // DCA is future, shown in timeline
+            const trigPct = targetShares > 0 ? Math.min(100 - existPct, (totalFromTriggers / targetShares) * 100) : 0;
+
+            // Basis depletion at target
+            const targetBasis = strcBasis + (triggerShares * STRC_PRICE) + (sharesStillNeeded * STRC_PRICE);
+            const annRoc = targetShares * ANN_DIV;
+            const deplYrs = annRoc > 0 ? targetBasis / annRoc : 0;
+
+            // --- UPDATE UI ---
+
+            // Progress bar
+            document.getElementById('barExisting').style.width = existPct + '%';
+            document.getElementById('barDCA').style.width = '0%';
+            document.getElementById('barTriggers').style.width = trigPct + '%';
+            document.getElementById('progressPct').textContent = Math.round(progressPct) + '%';
+            document.getElementById('legendExisting').textContent = Math.round(existingShares).toLocaleString();
+            document.getElementById('legendDCA').textContent = 'ongoing';
+            document.getElementById('legendTriggers').textContent = Math.round(totalFromTriggers).toLocaleString();
+            document.getElementById('legendRemaining').textContent = sharesStillNeeded > 0
+                ? Math.round(sharesStillNeeded).toLocaleString() + ' to go'
+                : '✓ Target reached';
+
+            // Cards
+            document.getElementById('currentMonthly').textContent = fmt(currentMonthly);
+            document.getElementById('afterTriggersMonthly').textContent = fmt(afterTriggersMonthly);
+            document.getElementById('totalTax').textContent = fmt(triggerTax);
+            let tp = [];
+            if (fedRate > 0) tp.push(Math.round(fedRate*100) + '% fed');
+            if (stateRate > 0) tp.push(Math.round(stateRate*100*10)/10 + '% state');
+            if (niit > 0) tp.push('3.8% NIIT');
+            document.getElementById('taxRateDisplay').textContent = tp.join(' + ') || 'no tax';
+            document.getElementById('btcRemaining').textContent = btcLeft.toFixed(4);
+            document.getElementById('btcRemainingVal').textContent = fmt(btcLeft * btcPrice);
+
+            // DCA timeline display
+            document.getElementById('dcaOnlyYears').textContent = dcaOnlyMonths === Infinity ? '∞' : dcaOnlyYears.toFixed(1);
+            document.getElementById('combinedYears').textContent = combinedMonths === Infinity
+                ? (sharesStillNeeded <= 0 ? '0' : '∞')
+                : dcaYears.toFixed(1);
+            document.getElementById('alreadyFundedPct').textContent = Math.round(progressPct) + '%';
+
+            // Depletion
+            document.getElementById('depletionYears').textContent = deplYrs.toFixed(1);
+
+            // Waterfall table
+            let wh = `<thead><tr class="border-b border-zinc-800">
+                <th class="text-left py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">When BTC Hits</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Sell</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Gross</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Tax</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">→ STRC</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Running Total</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Monthly Income</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">BTC Left</th>
+            </tr></thead><tbody class="divide-y divide-zinc-800/50">`;
+
+            if (steps.length === 0) {
+                wh += `<tr><td colspan="8" class="py-6 text-center text-zinc-500 text-sm">No price triggers set</td></tr>`;
+            } else {
+                steps.forEach(s => {
+                    const pctOfTarget = targetShares > 0 ? Math.round((s.runStrc / targetShares) * 100) : 0;
+                    wh += `<tr>
+                        <td class="py-3 px-3 text-amber-400">${fmt(s.price)}</td>
+                        <td class="py-3 px-3 text-right">${s.sell.toFixed(4)} <span class="text-[10px] text-zinc-500">(${s.pct}% of rem.)</span></td>
+                        <td class="py-3 px-3 text-right">${fmt(s.gross)}</td>
+                        <td class="py-3 px-3 text-right text-rose-400">${fmt(s.tax)}</td>
+                        <td class="py-3 px-3 text-right text-emerald-400">+${Math.round(s.shares).toLocaleString()}</td>
+                        <td class="py-3 px-3 text-right font-semibold">${Math.round(s.runStrc).toLocaleString()} <span class="text-[10px] text-zinc-500">(${pctOfTarget}%)</span></td>
+                        <td class="py-3 px-3 text-right text-emerald-400">${fmt(s.runMonthly)}/mo</td>
+                        <td class="py-3 px-3 text-right">${s.btcLeft.toFixed(4)}</td>
+                    </tr>`;
+                });
+            }
+            wh += '</tbody>';
+            document.getElementById('waterfallTable').innerHTML = wh;
+
+            // Cost table — what does the full target cost at various BTC prices
+            const costPrices = [50000, 100000, 150000, 200000, 300000, 500000, 1000000];
+            let ch = `<thead><tr class="border-b border-zinc-800">
+                <th class="text-left py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">If BTC Is At</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">BTC Needed</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">% of Your Stack</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Tax Hit</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">BTC Remaining</th>
+                <th class="text-right py-3 px-3 font-normal text-[10px] uppercase tracking-wider text-zinc-500">Remaining Value</th>
+            </tr></thead><tbody class="divide-y divide-zinc-800/50">`;
+
+            const sharesToBuy = Math.max(0, targetShares - existingShares);
+            const dollarCost = sharesToBuy * STRC_PRICE;
+
+            costPrices.forEach(p => {
+                // Gross needed before tax — need to solve: gross - (gross - basis)*taxRate = dollarCost
+                // gross - gross*taxRate + basis*taxRate = dollarCost
+                // gross*(1-taxRate) = dollarCost - basis*taxRate... but basis depends on BTC sold
+                // Simpler: iterative or direct. BTC to sell = X, X*p - (X*p - X*avgCost)*taxRate = dollarCost
+                // X*p*(1-taxRate) + X*avgCost*taxRate = dollarCost
+                // X * (p*(1-taxRate) + avgCost*taxRate) = dollarCost
+                const effectivePerBtc = p * (1 - taxRate) + avgCost * taxRate;
+                const btcNeeded = effectivePerBtc > 0 ? dollarCost / effectivePerBtc : 0;
+                const pctStack = btcHold > 0 ? (btcNeeded / btcHold) * 100 : 0;
+                const gain = Math.max(0, btcNeeded * p - btcNeeded * avgCost);
+                const tax = gain * taxRate;
+                const btcAfter = btcHold - btcNeeded;
+                const valAfter = btcAfter * p;
+                const stackColor = pctStack > 50 ? 'text-rose-400' : pctStack > 25 ? 'text-amber-400' : 'text-emerald-400';
+
+                ch += `<tr>
+                    <td class="py-3 px-3 font-medium text-zinc-300">${fmt(p)}</td>
+                    <td class="py-3 px-3 text-right">${btcNeeded.toFixed(4)}</td>
+                    <td class="py-3 px-3 text-right ${stackColor}">${pctStack.toFixed(1)}%</td>
+                    <td class="py-3 px-3 text-right text-rose-400">${fmt(tax)}</td>
+                    <td class="py-3 px-3 text-right">${btcAfter.toFixed(4)}</td>
+                    <td class="py-3 px-3 text-right text-emerald-400">${fmt(valAfter)}</td>
+                </tr>`;
+            });
+            ch += '</tbody>';
+            document.getElementById('costTable').innerHTML = ch;
+
+            // Stress test
+            const halfP = btcPrice * 0.5;
+            document.getElementById('stressPrice').textContent = fmt(halfP);
+            document.getElementById('stressBtcVal').textContent = fmt(btcLeft * halfP);
+            document.getElementById('stressStrcVal').textContent = fmt(afterTriggersShares * PAR);
+            document.getElementById('stressIncome').textContent = fmt(afterTriggersMonthly) + '/mo';
+
+            // Journey chart
+            document.getElementById('chartTargetIncome').textContent = fmt(gap);
+            updateJourneyChart(existingShares, totalFromTriggers, targetShares, horizon, age);
+        }
+
+        let journeyChartInst = null;
+
+        function updateJourneyChart(existingShares, triggerShares, targetShares, horizonYears, startAge) {
+            const totalMonths = horizonYears * 12;
+            const labels = [];
+            const dcaOnlyData = [];
+            const afterTriggersData = [];
+            const targetData = [];
+            
+            const targetIncome = targetShares * MO_DIV;
+            
+            let dcaOnlyAccum = existingShares;
+            let withTriggersAccum = existingShares + triggerShares;
+            
+            // Walk month by month, sample every 3 for chart
+            for (let m = 0; m <= totalMonths; m++) {
+                const ageAtMonth = startAge + m / 12;
+                const sharesThisMonth = m === 0 ? 0 : getDcaSharesAtAge(ageAtMonth);
+                dcaOnlyAccum += sharesThisMonth;
+                withTriggersAccum += sharesThisMonth;
+                
+                if (m % 3 === 0) {
+                    const yr = m / 12;
+                    labels.push(yr);
+                    dcaOnlyData.push(Math.min(dcaOnlyAccum * MO_DIV, targetIncome));
+                    afterTriggersData.push(Math.min(withTriggersAccum * MO_DIV, targetIncome));
+                    targetData.push(targetIncome);
+                }
+            }
+            
+            const ctx = document.getElementById('journeyChart');
+            if (journeyChartInst) journeyChartInst.destroy();
+            
+            journeyChartInst = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Target',
+                            data: targetData,
+                            borderColor: 'rgba(234,179,8,0.3)',
+                            borderWidth: 2,
+                            borderDash: [8, 4],
+                            pointRadius: 0,
+                            fill: false
+                        },
+                        {
+                            label: 'Triggers + DCA',
+                            data: afterTriggersData,
+                            borderColor: '#eab308',
+                            backgroundColor: 'rgba(234,179,8,0.06)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHitRadius: 10
+                        },
+                        {
+                            label: 'DCA only',
+                            data: dcaOnlyData,
+                            borderColor: '#38bdf8',
+                            backgroundColor: 'rgba(56,189,248,0.06)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHitRadius: 10
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#18181b',
+                            titleColor: '#eab308',
+                            bodyColor: '#a1a1aa',
+                            displayColors: true,
+                            callbacks: {
+                                title: (items) => {
+                                    const yr = items[0].label;
+                                    return yr < 1 ? `${Math.round(yr * 12)} months` : `Year ${parseFloat(yr).toFixed(1)}`;
+                                },
+                                label: (item) => `${item.dataset.label}: ${fmt(item.raw)}/mo`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#1c1c1e' },
+                            ticks: {
+                                color: '#3f3f46',
+                                font: { size: 10 },
+                                callback: v => v % 5 === 0 ? 'Yr ' + v : ''
+                            },
+                            title: { display: true, text: 'Years', color: '#3f3f46', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: '#1c1c1e' },
+                            ticks: { color: '#3f3f46', font: { size: 10 }, callback: v => fmt(v) },
+                            title: { display: true, text: 'Monthly Income', color: '#3f3f46', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Init
+        window.onload = function() {
+            document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', calc));
+            renderDcaPhases();
+            renderTriggers();
+            fetchBtcPrice();
+            setTimeout(calc, 600);
+        };
+    </script>
+</body>
+</html>
